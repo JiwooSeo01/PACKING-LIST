@@ -25,7 +25,7 @@
             background: #fff;
             border: 1px solid #edf0f5;
             border-radius: 16px;
-            padding: 16px;
+            padding: 18px;
             margin-bottom: 16px;
         }
 
@@ -36,6 +36,15 @@
             font-size: 1rem;
         }
 
+        input[type="date"].form-control {
+            padding: 12px 16px;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            opacity: 0.9;
+        }
+
         button {
             border-radius: 12px !important;
             height: 58px;
@@ -43,46 +52,52 @@
         }
 
         .hint {
-            font-size: 0.9rem;
+            font-size: 0.92rem;
             color: #6b7280;
             margin-top: 6px;
         }
 
-        .custom-file {
+        .example-box {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .custom-file-wrap {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            min-height: 58px;
-            border: 1px solid #ced4da;
-            border-radius: 12px;
-            background: #fff;
-            overflow: hidden;
-            padding-left: 16px;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 8px;
         }
 
-        .custom-file-name {
-            color: #6b7280;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            padding-right: 12px;
-            flex: 1;
+        .file-status {
+            font-size: 15px;
+            color: #374151;
         }
 
-        .custom-file-btn {
-            height: 100%;
-            min-height: 58px;
-            border: none;
-            border-left: 1px solid #ced4da;
-            background: #f8f9fa;
-            padding: 0 18px;
-            font-size: 1rem;
-            cursor: pointer;
-            white-space: nowrap;
+        .choose-btn {
+            min-width: 170px;
         }
 
-        .custom-file input[type="file"] {
-            display: none;
+        .section-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .custom-file-wrap {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .choose-btn {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -91,7 +106,8 @@
     <div class="card p-4 p-md-5">
         <h1 class="mb-3">Packing List Generator</h1>
         <p class="text-muted mb-4">
-            Fill the packing list using passport, VIN sticker, and export declaration.
+            For each vehicle, upload 3 files together in one file picker:
+            passport, VIN sticker, and export declaration.
         </p>
 
         {% with messages = get_flashed_messages() %}
@@ -118,7 +134,7 @@
 
                 <div class="col-md-4">
                     <label class="form-label">Date</label>
-                    <input class="form-control" type="text" name="page_date" placeholder="DD.MM.YYYY" required>
+                    <input class="form-control" type="date" name="page_date" required>
                 </div>
 
                 <div class="col-md-4">
@@ -150,13 +166,14 @@
             <div class="row g-3 mt-2 d-none" id="otherCountryWrap">
                 <div class="col-md-4">
                     <label class="form-label">Other Country</label>
-                    <input class="form-control" type="text" name="other_country" placeholder="Enter country">
+                    <input class="form-control" type="text" name="other_country" placeholder="Enter country name">
                 </div>
             </div>
 
             <hr class="my-4">
 
             <div id="vehicleUploads"></div>
+
 
             <button class="btn btn-primary w-100 mt-3" type="submit">
                 Generate Packing List
@@ -171,15 +188,63 @@
     const countrySelect = document.getElementById('countrySelect');
     const otherCountryWrap = document.getElementById('otherCountryWrap');
 
-    function createCustomFileInput(labelText, inputName, acceptValue) {
-        return `
-            <label class="form-label">${labelText}</label>
-            <label class="custom-file">
-                <span class="custom-file-name">No file chosen</span>
-                <span class="custom-file-btn">Choose File</span>
-                <input type="file" name="${inputName}" accept="${acceptValue}" required onchange="updateFileName(this)">
-            </label>
+    function createVehicleCard(index) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'vehicle-card';
+
+        wrapper.innerHTML = `
+            <div class="section-title">Vehicle #${index} (KG-${String(index).padStart(2, '0')})</div>
+
+            <input
+                type="file"
+                id="vehicle_files_${index}"
+                name="vehicle_files_${index}"
+                multiple
+                accept="image/*,.pdf"
+                hidden
+                required
+            >
+
+            <div class="custom-file-wrap">
+                <button
+                    type="button"
+                    class="btn btn-outline-primary choose-btn"
+                    onclick="document.getElementById('vehicle_files_${index}').click()"
+                >
+                    Choose Files
+                </button>
+
+                <span class="file-status" id="vehicle_files_status_${index}">
+                    No files selected
+                </span>
+            </div>
+
+            <div class="hint">
+                Upload 3 files for this vehicle: passport, VIN sticker, export declaration.
+            </div>
         `;
+
+        return wrapper;
+    }
+
+    function attachVehicleFileListeners(total) {
+        for (let i = 1; i <= total; i++) {
+            const input = document.getElementById(`vehicle_files_${i}`);
+            const status = document.getElementById(`vehicle_files_status_${i}`);
+
+            if (!input || !status) continue;
+
+            input.addEventListener('change', function () {
+                const count = input.files.length;
+
+                if (count === 0) {
+                    status.textContent = 'No files selected';
+                    return;
+                }
+
+                status.textContent = `Files: ${count}`;
+            });
+        }
     }
 
     function renderVehicleFields(count) {
@@ -187,33 +252,10 @@
         const total = Number(count || 0);
 
         for (let i = 1; i <= total; i++) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'vehicle-card';
-
-            wrapper.innerHTML = `
-                <h5 class="mb-3">Vehicle #${i}</h5>
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        ${createCustomFileInput("Passport Photo", `passport_${i}`, "image/*,.pdf")}
-                    </div>
-
-                    <div class="col-md-4">
-                        ${createCustomFileInput("VIN Sticker Photo", `vin_${i}`, "image/*,.pdf")}
-                    </div>
-
-                    <div class="col-md-4">
-                        ${createCustomFileInput("Export Declaration (PDF)", `export_${i}`, ".pdf")}
-                    </div>
-                </div>
-            `;
-
-            vehicleUploads.appendChild(wrapper);
+            vehicleUploads.appendChild(createVehicleCard(i));
         }
-    }
 
-    function updateFileName(input) {
-        const fileNameSpan = input.closest('.custom-file').querySelector('.custom-file-name');
-        fileNameSpan.textContent = input.files.length ? input.files[0].name : 'No file chosen';
+        attachVehicleFileListeners(total);
     }
 
     vehicleCount.addEventListener('change', function (e) {

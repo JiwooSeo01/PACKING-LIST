@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="card card-soft p-4 p-md-5">
+    {% if user %}
+        <h1 class="mb-3">Welcome</h1>
+        <p class="text-muted mb-4">You are logged in as <strong>{{ user["email"] }}</strong>.</p>
+
+        {% if profile %}
+            <div class="mb-4">
+                <div><strong>Company Name:</strong> {{ profile["company_name"] }}</div>
+                <div><strong>Company Address:</strong> {{ profile["company_address"] }}</div>
+                <div><strong>Company Phone:</strong> {{ profile["company_phone"] }}</div>
+            </div>
+            <a class="btn btn-primary" href="{{ url_for('generator') }}">Packing List Generator</a>
+        {% else %}
+            <p class="mb-4">First complete your company profile.</p>
+            <a class="btn btn-primary" href="{{ url_for('my_page') }}">Go to My Page</a>
+        {% endif %}
+    {% else %}
+        <h1 class="mb-3">Main Menu</h1>
+        <p class="text-muted mb-4">Please log in or register to continue.</p>
+        <a class="btn btn-outline-primary me-2" href="{{ url_for('login') }}">Login</a>
+        <a class="btn btn-primary" href="{{ url_for('register') }}">Register</a>
+    {% endif %}
+</div>
+{% endblock %}

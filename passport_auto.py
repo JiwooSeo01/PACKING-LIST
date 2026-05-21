@@ -1,25 +1,30 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 import random
 import string
 import os
-from pathlib import Path
+import numpy as np
+import cv2
 
-# ===== 설정 =====
+# ======================
+# 설정
+# ======================
 TEMPLATE_PATH = "passport_template.jpg"
-OUTPUT_DIR = "output"
+OUTPUT_DIR = "passports"
 NUM_IMAGES = 10
 
-# MRZ 영역 좌표 (기존 좌표 유지)
 MRZ_BOX = (300, 1091, 1001, 1158)
 
-# 폰트 설정 (OCR-B.ttf 파일이 같은 폴더에 있어야 함)
 FONT_PATH = "OCR-B.ttf"
-FONT_SIZE = 25  # 인식률을 위해 크기를 살짝 키움
+FONT_SIZE = 21
 
-# ===== MRZ 체크섬 계산 함수 (필수) =====
+
+# ======================
+# MRZ 체크섬
+# ======================
 def get_check_digit(data):
     weight = [7, 3, 1]
     total = 0
+
     for i, char in enumerate(data):
         if '0' <= char <= '9':
             val = int(char)
@@ -27,44 +32,52 @@ def get_check_digit(data):
             val = ord(char) - 55
         else:
             val = 0
+
         total += val * weight[i % 3]
+
     return str(total % 10)
+
 
 def pad(text, length=44):
     return text[:length].ljust(length, "<")
 
-# ===== MRZ 데이터 생성 (체크섬 포함) =====
+
+# ======================
+# MRZ 생성
+# ======================
 def generate_mrz_with_check():
     countries = ["KAZ", "KGZ", "UZB", "KOR", "USA"]
+
     country = random.choice(countries)
     surname = random.choice(["IVANOV", "KIM", "LEE", "SMITH", "SAIDOV"])
     name = random.choice(["SERGEI", "ALTYN", "MINJUN", "JOHN", "BAKHTIYOR"])
 
-    # Line 1
     line1 = pad(f"P<{country}{surname}<<{name}")
 
-    # Line 2: 여권번호 + 체크섬 + 국적 + 생일 + 체크섬 + 성별 + 만료일 + 체크섬
     pno = random.choice(string.ascii_uppercase) + ''.join(random.choices(string.digits, k=8))
     pno_check = get_check_digit(pno)
-    
+
     birth = f"{random.randint(70, 99):02}{random.randint(1, 12):02}{random.randint(1, 28):02}"
     birth_check = get_check_digit(birth)
-    
+
     expiry = f"{random.randint(25, 35):02}{random.randint(1, 12):02}{random.randint(1, 28):02}"
     expiry_check = get_check_digit(expiry)
-    
+
     sex = random.choice(["M", "F"])
 
     line2 = pad(f"{pno}{pno_check}{country}{birth}{birth_check}{sex}{expiry}{expiry_check}")
 
     return line1, line2
 
-# ===== 이미지에 MRZ 그리기 (에러 수정됨) =====
+
+# ======================
+# MRZ 렌더링
+# ======================
 def draw_mrz(image, mrz_box, mrz_lines, font_path, font_size):
     draw = ImageDraw.Draw(image)
+
     x1, y1, x2, y2 = mrz_box
 
-    # 배경 지우기
     draw.rectangle(mrz_box, fill="white")
 
     try:
@@ -72,46 +85,146 @@ def draw_mrz(image, mrz_box, mrz_lines, font_path, font_size):
     except:
         font = ImageFont.load_default()
 
-    # --- 핵심: 자간 강제 조절 ---
-    # MRZ 표준은 한 줄에 정확히 44글자입니다.
-    # 전체 너비를 44로 나누어 한 글자가 차지할 '칸'을 계산합니다.
-    char_width = (x2 - x1) / 44 
+    total_width = x2 - x1
+    char_width = total_width / 44
     line_height = (y2 - y1) / 2
 
-    for row_idx, line in enumerate(mrz_lines):
-        for col_idx, char in enumerate(line):
-            # 각 글자의 시작 X 좌표를 수동으로 계산 (이게 '고정 폭'을 만듭니다)
-            char_x = x1 + (col_idx * char_width)
-            char_y = y1 + (row_idx * line_height)
-            
-            # 한 글자씩 그리기
-            draw.text((char_x, char_y), char, font=font, fill="black")
+    for r, line in enumerate(mrz_lines):
+        for c, ch in enumerate(line):
+            draw.text(
+                (x1 + c * char_width, y1 + r * line_height - 2),
+                ch,
+                font=font,
+                fill="black"
+            )
 
     return image
 
-# ===== 메인 실행부 =====
+
+# ======================
+# 🔥 AUGMENTATION (강화 버전)
+# ======================
+
+def random_perspective(image, strength=0.1):
+    img = np.array(image)
+    h, w = img.shape[:2]
+
+    src = np.float32([[0,0],[w,0],[w,h],[0,h]])
+
+    dx, dy = w * strength, h * strength
+
+    dst = np.float32([
+        [random.uniform(0, dx), random.uniform(0, dy)],
+        [w - random.uniform(0, dx), random.uniform(0, dy)],
+        [w - random.uniform(0, dx), h - random.uniform(0, dy)],
+        [random.uniform(0, dx), h - random.uniform(0, dy)]
+    ])
+
+    matrix = cv2.getPerspectiveTransform(src, dst)
+    warped = cv2.warpPerspective(img, matrix, (w, h), borderValue=(255,255,255))
+
+    return Image.fromarray(warped)
+
+
+def random_warp(image, intensity=4):
+    img = np.array(image)
+    h, w = img.shape[:2]
+
+    map_x, map_y = np.meshgrid(np.arange(w), np.arange(h))
+
+    dx = np.sin(map_y / 30.0) * random.uniform(-intensity, intensity)
+    dy = np.cos(map_x / 40.0) * random.uniform(-intensity, intensity)
+
+    map_x = (map_x + dx).astype(np.float32)
+    map_y = (map_y + dy).astype(np.float32)
+
+    warped = cv2.remap(
+        img,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(255,255,255)
+    )
+
+    return Image.fromarray(warped)
+
+
+def uneven_light(image):
+    img = np.array(image).astype(np.float32)
+    h, w = img.shape[:2]
+
+    x_grad = np.tile(np.linspace(0.7, 1.3, w), (h, 1))
+    y_grad = np.tile(np.linspace(1.2, 0.8, h), (w, 1)).T
+
+    mask = (x_grad * y_grad)[:, :, None]
+
+    img *= mask
+    return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
+
+
+def motion_blur(image, size=7):
+    img = np.array(image)
+
+    kernel = np.zeros((size, size))
+    kernel[size // 2, :] = 1
+    kernel = kernel / size
+
+    blurred = cv2.filter2D(img, -1, kernel)
+    return Image.fromarray(blurred)
+
+
+def random_blur(image, p=0.6):
+    if random.random() < p:
+        return image.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.3, 1.2)))
+    return image
+
+
+def random_light(image):
+    image = ImageEnhance.Brightness(image).enhance(random.uniform(0.85, 1.15))
+    image = ImageEnhance.Contrast(image).enhance(random.uniform(0.85, 1.2))
+    return image
+
+
+def random_noise(image):
+    img = np.array(image)
+    noise = np.random.normal(0, random.randint(5, 25), img.shape)
+    img = np.clip(img + noise, 0, 255).astype(np.uint8)
+    return Image.fromarray(img)
+
+
+# ======================
+# MAIN
+# ======================
 def main():
     if not os.path.exists(TEMPLATE_PATH):
-        print(f"❌ 템플릿 파일({TEMPLATE_PATH})이 없습니다!")
+        print("❌ template 없음")
         return
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     for i in range(NUM_IMAGES):
-        # 이미지 열기
         img = Image.open(TEMPLATE_PATH).convert("RGB")
 
-        # MRZ 데이터 생성 (체크섬 포함)
         mrz_lines = generate_mrz_with_check()
-
-        # MRZ 그리기 (인자 5개 정확히 전달)
         img = draw_mrz(img, MRZ_BOX, mrz_lines, FONT_PATH, FONT_SIZE)
 
-        # 저장
-        output_path = os.path.join(OUTPUT_DIR, f"passport_{i}.jpg")
-        img.save(output_path, quality=95) # 화질 유지
+        # ===== 🔥 강한 현실 환경 =====
+        img = random_perspective(img, 0.1)
+        # img = random_warp(img, 4)
+        img = uneven_light(img)
+        img = motion_blur(img, 5)
 
-        print(f"✅ 생성 완료: {output_path}")
+        # ===== 기본 노이즈 =====
+        img = random_blur(img, 0.6)
+        img = random_light(img)
+        img = random_noise(img)
+
+        output_path = os.path.join(OUTPUT_DIR, f"passport_{i}.jpg")
+        img.save(output_path, quality=95)
+
+        print(f"✅ 생성: {output_path}")
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}My Page{% endblock %}
+{% block content %}
+<div class="card card-soft p-4 p-md-5">
+    <h1 class="mb-4">My Page</h1>
+    <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label class="form-label">Company Name (B3)</label>
+            <input class="form-control" type="text" name="company_name"
+                   value="{{ profile['company_name'] if profile else '' }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Company Address (B4)</label>
+            <input class="form-control" type="text" name="company_address"
+                   value="{{ profile['company_address'] if profile else '' }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Company Phone (B6)</label>
+            <input class="form-control" type="text" name="company_phone"
+                   value="{{ profile['company_phone'] if profile else '' }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Company Stamp Image (E37)</label>
+            <input class="form-control" type="file" name="stamp_image" accept=".png,.jpg,.jpeg">
+            {% if profile and profile["stamp_image_path"] %}
+                <div class="mt-2 text-muted">Stamp image already uploaded.</div>
+            {% endif %}
+        </div>
+
+        <button class="btn btn-primary" type="submit">Save</button>
+    </form>
+</div>
+{% endblock %}

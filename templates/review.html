@@ -1,0 +1,30 @@
+<h2>Review Vehicles</h2>
+
+<form method="POST" action="/confirm">
+
+<table border="1">
+{% for v in rows %}
+<tr>
+  <td>Vehicle {{ v.vehicle_no }}</td>
+
+  <td>
+    VIN:
+    <input name="vin_{{ loop.index0 }}" value="{{ v.vin_string }}">
+  </td>
+
+  <td>
+    Passport:
+    <input name="doc_{{ loop.index0 }}" value="{{ v.document_id }}">
+  </td>
+
+  <td>
+    Name:
+    <input name="name_{{ loop.index0 }}" value="{{ v.full_name }}">
+  </td>
+</tr>
+{% endfor %}
+</table>
+
+<button type="submit">Confirm & Generate Excel</button>
+
+</form>
